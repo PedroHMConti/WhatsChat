@@ -20,7 +20,7 @@ public class ClienteThread extends Thread {
             String x;
 
             while ((x = reader.readLine()) != null) {
-                System.out.println("Servidor : " + x );
+                System.out.println("Servidor.Servidor : " + x );
             }
         }catch(Exception e){
             System.out.println("Erro no servidor");

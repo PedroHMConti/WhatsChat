@@ -19,7 +19,25 @@ public class ClienteModel {
 
     private byte[] k_c;
 
-    public ClienteModel(String ID_C,String ID_tgs,String senha) throws Exception {
+    private byte[] k_cTgs;
+
+    public byte[] getK_c() {
+        return k_c;
+    }
+
+    public void setK_c(byte[] k_c) {
+        this.k_c = k_c;
+    }
+
+    public byte[] getK_cTgs() {
+        return k_cTgs;
+    }
+
+    public void setK_cTgs(byte[] k_cTgs) {
+        this.k_cTgs = k_cTgs;
+    }
+
+    public ClienteModel(String ID_C, String ID_tgs, String senha) throws Exception {
         this.ID_C = ID_C;
         this.ID_tgs = ID_tgs;
         this.senha = senha;

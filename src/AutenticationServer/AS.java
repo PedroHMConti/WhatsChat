@@ -67,7 +67,7 @@ public class AS {
         dosTicket.writeInt(kcTgs.length);   // tamanho do byte[]
         dosTicket.write(kcTgs);             // os bytes
         dosTicket.writeUTF(idC);            // ID_C (tamanho embutido automaticamente)
-        dosTicket.writeUTF(String.valueOf(adC));
+        dosTicket.writeUTF(adC.getHostAddress());
         dosTicket.writeLong(ts2);
         byte[] ticketTgs = Cifra.cifrar(kTgs, bufTicket.toByteArray());
 
