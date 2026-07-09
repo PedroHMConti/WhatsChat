@@ -1,0 +1,160 @@
+RELATÓRIO TÉCNICO — IMPLEMENTAÇÃO DO PROTOCOLO KERBEROS EM JAVA
+Disciplina: Segurança em Redes de Computadores
+Aluno: Pedro Conti
+
+
+1. ARQUITETURA DO SISTEMA
+==========================
+
+O sistema implementa o protocolo Kerberos usando sockets TCP em Java.
+São quatro programas que rodam ao mesmo tempo e se comunicam em rede:
+
+  - Authentication Server (AS)   → porta 4999
+  - Ticket Granting Server (TGS) → porta 4998
+  - Servidor de Serviço (V)      → porta 4997
+  - Cliente                      → conecta aos três acima
+
+O cliente passa por três fases antes de poder usar o serviço:
+
+  Fase (a): Cliente fala com o AS e recebe um Ticket_tgs
+  Fase (b): Cliente fala com o TGS e recebe um Ticket_v
+  Fase (c): Cliente fala com o Servidor usando o Ticket_v
+
+Após a autenticação, cliente e servidor trocam mensagens de chat
+cifradas com a chave de sessão K_c,v.
+
+
+2. AUTHENTICATION SERVER (AS)
+==============================
+
+O AS é o primeiro servidor com quem o cliente fala. Ele guarda as
+chaves de todos os usuários e do TGS em um repositório (ASRepository).
+
+O cliente manda: seu ID, o ID do TGS e um timestamp (mensagem 1).
+
+O AS responde com a mensagem 2, que contém:
+  - A chave de sessão K_c,tgs (gerada aleatoriamente)
+  - O Ticket_tgs (cifrado com a chave do TGS)
+
+Tudo isso é cifrado com a chave do cliente (K_c), para que só ele
+consiga abrir. O Ticket_tgs é opaco ao cliente — ele não consegue
+ver o que está dentro, só repassa ao TGS.
+
+
+3. TICKET GRANTING SERVER (TGS)
+=================================
+
+O TGS recebe do cliente (mensagem 3):
+  - O ID do serviço desejado
+  - O Ticket_tgs
+  - Um autenticador cifrado com K_c,tgs
+
+O TGS abre o Ticket_tgs com sua própria chave (K_tgs), lê a K_c,tgs
+de dentro e usa para decifrar o autenticador. Em seguida verifica:
+  - Se o ticket ainda é válido (menos de 5 minutos desde a emissão)
+  - Se o ID e o endereço do autenticador batem com os do ticket
+
+Se tudo estiver certo, o TGS gera uma nova chave de sessão K_c,v e
+responde com a mensagem 4, contendo K_c,v e o Ticket_v. Tudo cifrado
+com K_c,tgs.
+
+
+4. DERIVAÇÃO DE CHAVES (KDF)
+==============================
+
+Para transformar a senha do usuário em uma chave criptográfica, foi
+implementada uma função de derivação de chave simples:
+
+  1. Concatena a senha com um salt fixo ("unb.br")
+  2. Aplica SHA-256 repetidamente por 100 rodadas
+  3. O resultado (32 bytes) é a chave pronta para usar no AES
+
+Exemplo:
+  senha "senha"    + salt "unb.br" → K_c  (chave do usuário Pedro)
+  senha "senha_tgs"+ salt "unb.br" → K_tgs (chave do TGS)
+
+A repetição do hash dificulta ataques de força bruta. O salt garante
+que a mesma senha gere chaves diferentes em contextos diferentes.
+
+
+5. TICKETS DE AUTENTICAÇÃO
+============================
+
+Ticket_tgs (criado pelo AS):
+  Conteúdo: K_c,tgs | ID_C | endereço do cliente | timestamp
+  Cifrado com: K_tgs (só o TGS abre)
+
+Ticket_v (criado pelo TGS):
+  Conteúdo: K_c,v | ID_C | endereço | ID do serviço | timestamp | validade
+  Cifrado com: K_v (só o Servidor abre)
+
+O cliente carrega esses tickets como "passes" e os apresenta a cada
+servidor. Nunca consegue ver o que está dentro — apenas entrega.
+
+
+6. AUTENTICAÇÃO MÚTUA
+=======================
+
+O sistema garante que ambos os lados provem sua identidade:
+
+Cliente prova quem é → envia um autenticador cifrado com a chave de
+sessão. O servidor decifra e verifica se os dados batem com o ticket.
+Quem não tem a chave de sessão não consegue montar um autenticador válido.
+
+Servidor prova quem é → ao receber o autenticador do cliente na fase
+(c), o servidor responde com a mensagem 6: o timestamp do autenticador
+somado de 1, cifrado com K_c,v. Só o servidor legítimo consegue fazer
+isso, pois só ele tem K_v para abrir o Ticket_v e extrair K_c,v.
+
+
+7. ALGORITMOS CRIPTOGRÁFICOS
+==============================
+
+AES-256 (Advanced Encryption Standard)
+  Usado para cifrar todas as mensagens e tickets.
+  Chaves de 32 bytes (256 bits), modo ECB com padding PKCS5.
+  Escolhido por ser o padrão atual mais usado e seguro.
+
+SHA-256
+  Usado na derivação de chaves (KDF).
+  Produz 32 bytes — tamanho exato para uma chave AES-256.
+
+SecureRandom
+  Usado para gerar as chaves de sessão K_c,tgs e K_c,v.
+  Garante aleatoriedade criptograficamente segura.
+
+
+8. DIFICULDADES E APRENDIZADOS
+================================
+
+Dificuldades encontradas:
+
+- Parear escrita e leitura: cada writeUTF/writeInt/writeLong do lado
+  do emissor precisa de um readUTF/readInt/readLong exatamente igual
+  do outro lado, na mesma ordem. Um erro aqui corrompía tudo e era
+  difícil de rastrear.
+
+- Chaves divergentes: o AS usava valores hex fixos que não batiam com
+  o que a KDF produzia em tempo de execução, causando BadPaddingException
+  na decriptação. A solução foi fazer o AS derivar as chaves na hora,
+  igual ao cliente e ao TGS fazem.
+
+- InetAddress com barra: o método toString() do InetAddress retorna
+  "/127.0.0.1" (com barra), que o getByName() não aceita. Corrigido
+  usando getHostAddress() que retorna só o IP limpo.
+
+- Lógica de validação invertida: o método que verifica se o ticket é
+  válido estava retornando verdadeiro para tickets expirados e falso
+  para os válidos. O TGS rejeitava todos os clientes legítimos.
+
+- Escopo de variáveis: o objeto com os dados da fase (b) estava
+  declarado dentro do bloco try, ficando inacessível na fase (c).
+
+Aprendizados:
+
+  O Kerberos é engenhoso porque o cliente nunca transmite sua senha
+  pela rede — apenas uma chave derivada dela é usada para decifrar
+  a resposta do AS. As chaves de sessão são temporárias e diferentes
+  para cada par de entidades, limitando o impacto de um eventual
+  vazamento. Os tickets permitem que servidores autentiquem clientes
+  sem precisar consultar o AS a cada requisição.

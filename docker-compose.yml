@@ -1,0 +1,38 @@
+services:
+
+  # ── Authentication Server (AS) — porta 4999 ──────────────────────────────────
+  as:
+    build: .
+    image: kerberos-app
+    environment:
+      MAIN_CLASS: AutenticationServer.AS
+    network_mode: host   # compartilha rede do host → "localhost" funciona no código
+
+  # ── Ticket Granting Server (TGS) — porta 4998 ────────────────────────────────
+  tgs:
+    image: kerberos-app
+    environment:
+      MAIN_CLASS: TicketGrantingServer.Tgs
+    network_mode: host
+    depends_on:
+      - as
+
+  # ── Servidor de Serviço (V) — porta 4997 ─────────────────────────────────────
+  servidor:
+    image: kerberos-app
+    environment:
+      MAIN_CLASS: Servidor.Servidor
+    network_mode: host
+    depends_on:
+      - tgs
+
+  # ── Cliente — interativo (chat pelo terminal) ─────────────────────────────────
+  cliente:
+    image: kerberos-app
+    environment:
+      MAIN_CLASS: Cliente.Cliente
+    network_mode: host
+    stdin_open: true   # mantém stdin aberto para o chat
+    tty: true
+    depends_on:
+      - servidor
