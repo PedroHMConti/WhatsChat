@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HexFormat;
 
+import java.util.Scanner;
+
 import static criptografia.Cifra.decifrar;
 import static criptografia.FuncaoDerivacaoChave.derivarChave;
 
@@ -19,6 +21,7 @@ public class Cliente {
     public static void main(String[] args) throws Exception {
         ClienteModel cliente = new ClienteModel("Pedro", "TGS@TRABALHOSEC", "senha");
         Mensagem2_Decifrada msg2 = new Mensagem2_Decifrada();
+        Mensagem4_Decifrada msg4 = new Mensagem4_Decifrada();
 
         // ===== FASE (a): troca com o AS =====
         try (Socket socketAS = new Socket("localhost", 4999);
@@ -36,11 +39,21 @@ public class Cliente {
               var saida   = new DataOutputStream(socketTGS.getOutputStream());
               var entrada = new DataInputStream(socketTGS.getInputStream())) {
             escreveMensagem3(saida, cliente, msg2);
-            Mensagem4_Decifrada msg4 = lerMensagem4(entrada, msg2.getKcTgs());
+            lerMensagem4(entrada, msg2.getKcTgs(), msg4);
          }catch (Exception e){
              e.printStackTrace();
          }
-        // ===== FASE (c): depois conecta ao serviço, usando ticketV =====
+        // ===== FASE (c): conecta ao serviço, usando ticketV =====
+        try(Socket socketV = new Socket("localhost", 4997);
+            var saida   = new DataOutputStream(socketV.getOutputStream());
+            var entrada = new DataInputStream(socketV.getInputStream())){
+            escreveMensagem5(saida, cliente, msg4);
+            leMensagem6(entrada, msg4.getKcV());
+            chat(saida, entrada, msg4.getKcV(), cliente.getID_C());
+
+        }catch (Exception e){
+            e.printStackTrace();
+        }
     }
     public static void escreveMensagem1(DataOutputStream saida,ClienteModel cliente) throws IOException {
         // mensagem (1): ID_C ‖ ID_tgs ‖ TS1
@@ -97,7 +110,7 @@ public class Cliente {
         System.out.println("Ticket_tgs (encriptado, " + tamTicket + " bytes) guardado.");
         return msg2;
     }
-    public static Mensagem4_Decifrada lerMensagem4(DataInputStream entrada, byte[] kcTgs) throws Exception {
+    public static Mensagem4_Decifrada lerMensagem4(DataInputStream entrada, byte[] kcTgs, Mensagem4_Decifrada msg4) throws Exception {
         System.out.println("Recebe mensagem (4): E(K_c,tgs, [K_c,v ‖ ID_v ‖ TS₄ ‖ Ticket_v])");
 
         // lê e decifra com K_c,tgs
@@ -120,7 +133,6 @@ public class Cliente {
         byte[] ticketV = new byte[tamTicketV];
         dis.readFully(ticketV);
 
-        Mensagem4_Decifrada msg4 = new Mensagem4_Decifrada();
         msg4.setKcV(kcV);
         msg4.setIdV(idV);
         msg4.setTs4(Instant.ofEpochMilli(ts4).atZone(ZoneId.systemDefault()).toLocalDateTime());
@@ -146,4 +158,62 @@ public class Cliente {
         saida.flush();
         System.out.println("mensagem (3) enviada com sucesso!");
     }
+    public static void escreveMensagem5(DataOutputStream saida, ClienteModel cliente, Mensagem4_Decifrada msg4) throws Exception {
+        System.out.println("fase (c) informando mensagem (5): C -> V:  ID_V ‖ Ticket_v ‖ Authenticator_c");
+
+        // Authenticator_c cifrado com K_c,v: E(K_c,v, [ID_C ‖ AD_C ‖ TS5])
+        byte[] autenticador_c = Cifra.criaAUtenticador(msg4.getKcV(), cliente.getID_C(), cliente.getAD_C());
+
+        saida.writeUTF(msg4.getIdV());                  // ID_V
+        saida.writeInt(msg4.getTicketV().length);        // tamanho do Ticket_v
+        saida.write(msg4.getTicketV());                  // Ticket_v (opaco, cifrado com K_v)
+        saida.writeInt(autenticador_c.length);           // tamanho do Authenticator_c
+        saida.write(autenticador_c);                     // E(K_c,v, [ID_C ‖ AD_C ‖ TS5])
+        saida.flush();
+        System.out.println("mensagem (5) enviada com sucesso!");
+    }
+    public static void leMensagem6(DataInputStream entrada, byte[] kcV) throws Exception {
+        System.out.println("Recebe mensagem (6): E(K_c,v, [TS5+1])");
+
+        int tam = entrada.readInt();
+        byte[] mensagem6 = entrada.readNBytes(tam);
+        byte[] miolo = Cifra.decifrar(kcV, mensagem6);
+        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(miolo));
+
+        long ts5mais1 = dis.readLong();
+        System.out.println("TS5+1 recebido: " + ts5mais1);
+        System.out.println("Servidor autenticado — sessão estabelecida com sucesso!");
+    }
+
+    public static void chat(DataOutputStream saida, DataInputStream entrada, byte[] kcV, String idC) throws Exception {
+        Scanner scanner = new Scanner(System.in);
+
+        // thread separada para receber mensagens do servidor em paralelo
+        Thread receptor = new Thread(() -> {
+            try {
+                while (true) {
+                    int tam = entrada.readInt();
+                    byte[] cifrado = entrada.readNBytes(tam);
+                    byte[] texto   = Cifra.decifrar(kcV, cifrado);
+                    System.out.println("[Servidor]: " + new String(texto));
+                }
+            } catch (Exception e) {
+                System.out.println("Conexão encerrada.");
+            }
+        });
+        receptor.setDaemon(true);
+        receptor.start();
+
+        // loop principal: lê do teclado e envia cifrado
+        System.out.println("Chat iniciado. Digite suas mensagens (SAIR para encerrar):");
+        while (true) {
+            String linha = scanner.nextLine();
+            if ("SAIR".equalsIgnoreCase(linha)) break;
+            byte[] cifrado = Cifra.cifrar(kcV, linha.getBytes());
+            saida.writeInt(cifrado.length);
+            saida.write(cifrado);
+            saida.flush();
+        }
+    }
+
 }
