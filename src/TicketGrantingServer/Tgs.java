@@ -25,11 +25,13 @@ public class Tgs  {
         while (true) {
             Socket socket = serverSocket.accept();      // bloqueia até alguém conectar
             System.out.println("cliente conectou ao AS");
+            System.out.println("--------------------------------------");
             try(socket;
                 var entrada = new DataInputStream(socket.getInputStream());
                 var saida   = new DataOutputStream(socket.getOutputStream())){
                 //le a mensagem
                 Mensagem3 msg3 = leMensagem3(entrada);
+                System.out.println("--------------------------------------");
 
                 //verificacao do tgs
                 //decifra o ticket e salva em uma variavel
@@ -117,19 +119,14 @@ public class Tgs  {
     }
 
     public static byte[] geraK_tgs(TgsModel tgs) throws Exception {
-        System.out.println("gerando K_tgs: ");
-        System.out.println( HexFormat.of().formatHex(FuncaoDerivacaoChave.derivarChave(tgs.getSenha(), "unb.br")));
         ASRepository repo = new ASRepository();
-        System.out.println(HexFormat.of().formatHex(repo.find_K_C("TGS@TRABALHOSEC")));
         return FuncaoDerivacaoChave.derivarChave(tgs.getSenha(), "unb.br");
     }
     public static byte[] decifrarTicket_tgs(TgsModel tgs,byte[] ticket_tgs)throws Exception{
-        System.out.println("decifrando ticket_tgs: ");
         return Cifra.decifrar(geraK_tgs(tgs),ticket_tgs);
     };
 
     public static TicketTgs leTicket_tgs(byte[] mioloDecifrado) throws Exception {
-        System.out.println("lendo ticket");
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(mioloDecifrado));
 
         // lê na MESMA ORDEM que o AS escreveu:
@@ -151,6 +148,7 @@ public class Tgs  {
     }
 
     public static Boolean verificarValidadeTicket_tgs(TicketTgs ticketTgs) {
+        System.out.println("--------------------------------------");
         System.out.println("verificarValidadeTicket_tgs");
         long ts2Millis = ticketTgs.getTS2()
                 .atZone(ZoneId.systemDefault())

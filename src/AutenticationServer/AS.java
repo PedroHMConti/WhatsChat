@@ -24,8 +24,8 @@ public class AS {
             try (socket;
                  var entrada = new DataInputStream(socket.getInputStream());
                  var saida   = new DataOutputStream(socket.getOutputStream())) {
-
-                System.out.println("Fase (a) recebendo mensagem (1): ID_C ‖ ID_tgs ‖ TS1");
+                System.out.println("--------------------------------------");
+                System.out.println("recebendo mensagem (1): ID_C ‖ ID_tgs ‖ TS1");
                 String idC = entrada.readUTF();
                 String idTgs = entrada.readUTF();
                 long ts1     = entrada.readLong();
@@ -36,16 +36,16 @@ public class AS {
                 InetAddress adC = socket.getInetAddress();
                 // 2. PROCESSA: busca K_c, sorteia K_c,tgs, cifra a msg (2)
                 byte[] mensagem2 = montarMensagem2(idC,idTgs,adC);
-                System.out.println(HexFormat.of().formatHex(mensagem2));
 
                 // 3. responde mensagem (2)
                 saida.writeInt(mensagem2.length);
                 saida.write(mensagem2);
+                System.out.println("--------------------------------------");
+                System.out.println("Mensagem (2) enviada com sucesso!");
 
             } catch (IOException e) {
                 System.out.println("Erro com o cliente: " + e.getMessage());
             }
-            // socket fecha sozinho (try-with-resources), volta ao accept()
         }
     }
     //inicializacoes

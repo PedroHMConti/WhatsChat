@@ -8,7 +8,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HexFormat;
 
@@ -23,7 +22,7 @@ public class Cliente {
         Mensagem2_Decifrada msg2 = new Mensagem2_Decifrada();
         Mensagem4_Decifrada msg4 = new Mensagem4_Decifrada();
 
-        // ===== FASE (a): troca com o AS =====
+        // ===== troca com o AS =====
         try (Socket socketAS = new Socket("localhost", 4999);
              var saida   = new DataOutputStream(socketAS.getOutputStream());
              var entrada = new DataInputStream(socketAS.getInputStream())) {
@@ -34,7 +33,7 @@ public class Cliente {
             e.printStackTrace();
         }
 
-        // ===== FASE (b): agora sim conecta ao TGS, usando ticketTgs =====
+        // ===== conexão com TGS =====
          try (Socket socketTGS = new Socket("localhost", 4998);
               var saida   = new DataOutputStream(socketTGS.getOutputStream());
               var entrada = new DataInputStream(socketTGS.getInputStream())) {
@@ -43,7 +42,7 @@ public class Cliente {
          }catch (Exception e){
              e.printStackTrace();
          }
-        // ===== FASE (c): conecta ao serviço, usando ticketV =====
+        // ===== conexão com o Serviço  =====
         try(Socket socketV = new Socket("localhost", 4997);
             var saida   = new DataOutputStream(socketV.getOutputStream());
             var entrada = new DataInputStream(socketV.getInputStream())){
@@ -57,7 +56,8 @@ public class Cliente {
     }
     public static void escreveMensagem1(DataOutputStream saida,ClienteModel cliente) throws IOException {
         // mensagem (1): ID_C ‖ ID_tgs ‖ TS1
-        System.out.println("fase (a) informando mensagem (1): ID_C ‖ ID_tgs ‖ TS1");
+        System.out.println("################# CONEXÃO COM AUTENTICATION SERVER #####################");
+        System.out.println("informando mensagem (1): ID_C ‖ ID_tgs ‖ TS1");
         System.out.println("ID_C: " + cliente.getID_C());
         System.out.println("ID_tgs: " + cliente.getID_tgs());
         System.out.println("TS1: "+System.currentTimeMillis() );
@@ -66,6 +66,7 @@ public class Cliente {
         saida.writeLong(System.currentTimeMillis());
         saida.flush();
         System.out.println("mensagem (1) enviada com sucesso!");
+        System.out.println("------------------------------------------");
     }
 
 
@@ -108,6 +109,8 @@ public class Cliente {
         System.out.println("K_c,tgs recebida: " + HexFormat.of().formatHex(kcTgs));
         System.out.println("ID_tgs: " + idTgs);
         System.out.println("Ticket_tgs (encriptado, " + tamTicket + " bytes) guardado.");
+        System.out.println("------------------------------------------");
+
         return msg2;
     }
     public static Mensagem4_Decifrada lerMensagem4(DataInputStream entrada, byte[] kcTgs, Mensagem4_Decifrada msg4) throws Exception {
@@ -141,11 +144,13 @@ public class Cliente {
         System.out.println("K_c,v recebida: " + HexFormat.of().formatHex(kcV));
         System.out.println("ID_v: " + idV);
         System.out.println("Ticket_v (encriptado, " + tamTicketV + " bytes) guardado.");
+        System.out.println("------------------------------------------");
         return msg4;
     }
 
     public static void escreveMensagem3(DataOutputStream saida,ClienteModel cliente,Mensagem2_Decifrada msg2) throws Exception {
-        System.out.println("fase (b) informando mensagem (3): C -> TGS:  ID_V ‖ Ticket_tgs ‖ Authenticator_c");
+        System.out.println("############## CONEXÃO COM  TGS ####################");
+        System.out.println("informando mensagem (3): C -> TGS:  ID_V ‖ Ticket_tgs ‖ Authenticator_c");
         System.out.println("ID_V: " + "Servidor");
         System.out.println("Ticket_tgs: " + msg2.getTicket_tgs().length + " bytes guardado." );
         System.out.println("TS2: "+msg2.getTS2().atZone(ZoneId.systemDefault()) );
@@ -157,9 +162,11 @@ public class Cliente {
         saida.write(autenticador_c);                        // E(K_c,tgs, [ID_C ‖ AD_C ‖ TS])
         saida.flush();
         System.out.println("mensagem (3) enviada com sucesso!");
+        System.out.println("-----------------------------------------");
     }
     public static void escreveMensagem5(DataOutputStream saida, ClienteModel cliente, Mensagem4_Decifrada msg4) throws Exception {
-        System.out.println("fase (c) informando mensagem (5): C -> V:  ID_V ‖ Ticket_v ‖ Authenticator_c");
+        System.out.println("############# CONEXÃO COM O SERVIÇO ##############");
+        System.out.println("informando mensagem (5): C -> V:  ID_V ‖ Ticket_v ‖ Authenticator_c");
 
         // Authenticator_c cifrado com K_c,v: E(K_c,v, [ID_C ‖ AD_C ‖ TS5])
         byte[] autenticador_c = Cifra.criaAUtenticador(msg4.getKcV(), cliente.getID_C(), cliente.getAD_C());
@@ -171,6 +178,7 @@ public class Cliente {
         saida.write(autenticador_c);                     // E(K_c,v, [ID_C ‖ AD_C ‖ TS5])
         saida.flush();
         System.out.println("mensagem (5) enviada com sucesso!");
+        System.out.println("------------------------------------------------");
     }
     public static void leMensagem6(DataInputStream entrada, byte[] kcV) throws Exception {
         System.out.println("Recebe mensagem (6): E(K_c,v, [TS5+1])");
@@ -183,6 +191,7 @@ public class Cliente {
         long ts5mais1 = dis.readLong();
         System.out.println("TS5+1 recebido: " + ts5mais1);
         System.out.println("Servidor autenticado — sessão estabelecida com sucesso!");
+        System.out.println("----------------------------------------------------------------");
     }
 
     public static void chat(DataOutputStream saida, DataInputStream entrada, byte[] kcV, String idC) throws Exception {
@@ -206,7 +215,7 @@ public class Cliente {
 
         // loop principal: lê do teclado e envia cifrado
         System.out.println("Chat iniciado. Digite suas mensagens (SAIR para encerrar):");
-        while (true) {
+        while (scanner.hasNextLine()) {
             String linha = scanner.nextLine();
             if ("SAIR".equalsIgnoreCase(linha)) break;
             byte[] cifrado = Cifra.cifrar(kcV, linha.getBytes());

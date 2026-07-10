@@ -20,7 +20,6 @@ public class Servidor {
     public static void main(String[] args) throws Exception {
         byte[] kV = FuncaoDerivacaoChave.derivarChave(SENHA_V, SALT);
         System.out.println("Servidor aguardando na porta 4997...");
-        System.out.println("K_v: " + HexFormat.of().formatHex(kV));
 
         ServerSocket serverSocket = new ServerSocket(4997);
         while (true) {
@@ -33,6 +32,7 @@ public class Servidor {
 
                 // ── lê mensagem (5): ID_v ‖ Ticket_v ‖ Authenticator_c ──
                 String idV = entrada.readUTF();
+                System.out.println("--------------------------------------");
                 System.out.println("ID_v recebido: " + idV);
 
                 int tamTicketV = entrada.readInt();
@@ -83,6 +83,7 @@ public class Servidor {
                 saida.write(mensagem6);
                 saida.flush();
                 System.out.println("Mensagem (6) enviada: E(K_c,v, [TS5+1])");
+                System.out.println("--------------------------------------");
 
                 // ── chat cifrado com K_c,v ──
                 chat(entrada, saida, kcV, idC_auth);
